@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Physics Simulation in Glass Sphere</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #1a1a1a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+  </style>
+</head>
+<body>
+<script>
+// ==========================================
+// シミュレーション設定パラメータ
+// ==========================================
+const SCREEN_WIDTH = 1024;
+const SCREEN_HEIGHT = 1024;
+
+const LARGE_SPHERE_DIAMETER = 800; // 大球の直径
+const LARGE_SPHERE_RADIUS = LARGE_SPHERE_DIAMETER / 2;
+
+const SMALL_SPHERE_COUNT = 100;     // 小球の個数
+const SMALL_SPHERE_MIN_SIZE = 10;   // 小球の最小直径
+const SMALL_SPHERE_MAX_SIZE = 50;   // 小球の最大直径
+
+const MOUSE_SPHERE_DIAMETER = 50;   // マウス円の直径
+const MOUSE_SPHERE_RADIUS = MOUSE_SPHERE_DIAMETER / 2;
+
+// --- 躍動感を保つパラメーター（初回の設定ベース） ---
+const GRAVITY = 0.12;               // ふんわり跳ねる低重力
+const AIR_DRAG = 0.99;              // 空気抵抗（滞空時間を長く）
+const INITIAL_RESTITUTION = 0.82;   // 高い初期反発力（よく跳ねる）
+const RESTITUTION_DECAY = 0.985;    // 衝突ごとの減衰率（ゆっくり弱まる）
+
+// --- 底面での完全停止用パラメーター ---
+const VELOCITY_CUTOFF = 0.25;       // 静止判定の速度閾値
+const SLEEP_FRAMES = 90;            // 底で落ち着いてから完全に止まるまでの時間（約1.5秒）
+
+// ==========================================
+// グローバル変数
+// ==========================================
+let balls = [];
+let centerPos;
+let prevMousePos;
+let mouseVel;
+
+function setup() {
+  createCanvas(SCREEN_WIDTH, SCREEN_HEIGHT);
+  centerPos = createVector(width / 2, height / 2);
+  prevMousePos = createVector(mouseX, mouseY);
+  mouseVel = createVector(0, 0);
+
+  // 初期配置生成
+  initBalls();
+}
+
+function draw() {
+  background(20);
+
+  // マウス速度の計算
+  let currentMouse = createVector(mouseX, mouseY);
+  mouseVel = p5.Vector.sub(currentMouse, prevMousePos);
+  prevMousePos = currentMouse.copy();
+
+  // 大球の描画
+  stroke(255);
+  strokeWeight(1);
+  fill(0);
+  ellipse(centerPos.x, centerPos.y, LARGE_SPHERE_DIAMETER);
+
+  // 小球の更新と壁・マウス判定
+  for (let i = 0; i < balls.length; i++) {
+    balls[i].update();
+    balls[i].checkWallCollision();
+    balls[i].checkMouseCollision(currentMouse, mouseVel);
+  }
+
+  // 小球同士の衝突判定
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      balls[i].checkBallCollision(balls[j]);
+    }
+  }
+
+  // 小球の描画
+  for (let ball of balls) {
+    ball.display();
+  }
+
+  // マウス円の描画（水色）
+  noStroke();
+  fill(0, 200, 255, 180);
+  ellipse(mouseX, mouseY, MOUSE_SPHERE_DIAMETER);
+}
+
+// 小球の初期生成
+function initBalls() {
+  balls = [];
+  let attempts = 0;
+  
+  while (balls.length < SMALL_SPHERE_COUNT && attempts < 10000) {
+    attempts++;
+    let r = random(SMALL_SPHERE_MIN_SIZE, SMALL_SPHERE_MAX_SIZE) / 2;
+    
+    // 大球の底部付近にランダム配置
+    let angle = random(PI * 0.2, PI * 0.8);
+    let distFromCenter = random(0, LARGE_SPHERE_RADIUS - r - 10);
+    
+    let x = centerPos.x + distFromCenter * cos(angle);
+    let y = centerPos.y + distFromCenter * sin(angle);
+    let candidatePos = createVector(x, y);
+
+    // 重なりチェック
+    let overlapping = false;
+    for (let b of balls) {
+      let d = p5.Vector.dist(candidatePos, b.pos);
+      if (d < r + b.r) {
+        overlapping = true;
+        break;
+      }
+    }
+
+    if (!overlapping) {
+      balls.push(new Ball(x, y, r));
+    }
+  }
+}
+
+// 小球クラス
+class Ball {
+  constructor(x, y, r) {
+    this.pos = createVector(x, y);
+    this.vel = createVector(0, 0);
+    this.acc = createVector(0, 0);
+    this.r = r;
+    this.mass = r * 0.1;
+    this.color = color(random(100, 255), random(100, 255), random(100, 255));
+    this.restitution = INITIAL_RESTITUTION;
+    
+    this.isStopped = false;
+    this.sleepTimer = 0;
+  }
+
+  update() {
+    if (this.isStopped) {
+      this.vel.set(0, 0);
+      return;
+    }
+
+    // 重力付加
+    this.acc.y += GRAVITY;
+
+    // 速度・位置更新
+    this.vel.add(this.acc);
+    this.vel.mult(AIR_DRAG);
+    this.pos.add(this.vel);
+    this.acc.mult(0);
+
+    // 底付近にあり、速度が落ちてきたらカウントイン
+    let distFromCenter = p5.Vector.dist(this.pos, centerPos);
+    let isNearBottom = (this.pos.y > centerPos.y) && (distFromCenter > LARGE_SPHERE_RADIUS - this.r - 30);
+
+    if (isNearBottom && this.vel.mag() < VELOCITY_CUTOFF) {
+      this.sleepTimer++;
+      if (this.sleepTimer > SLEEP_FRAMES) {
+        this.isStopped = true;
+        this.vel.set(0, 0);
+      }
+    } else {
+      this.sleepTimer = 0;
+    }
+  }
+
+  display() {
+    noStroke();
+    fill(this.color);
+    ellipse(this.pos.x, this.pos.y, this.r * 2);
+  }
+
+  // 反発力の減衰処理
+  decayRestitution() {
+    this.restitution *= RESTITUTION_DECAY;
+    if (this.restitution < 0.01) {
+      this.restitution = 0;
+    }
+  }
+
+  // 大球の内壁との衝突判定
+  checkWallCollision() {
+    let distFromCenter = p5.Vector.dist(this.pos, centerPos);
+    let maxDist = LARGE_SPHERE_RADIUS - this.r;
+
+    if (distFromCenter >= maxDist) {
+      let normal = p5.Vector.sub(this.pos, centerPos).normalize();
+      this.pos = p5.Vector.add(centerPos, p5.Vector.mult(normal, maxDist));
+      
+      let dot = this.vel.dot(normal);
+      if (dot > 0) {
+        let reflection = p5.Vector.mult(normal, (1 + this.restitution) * dot);
+        this.vel.sub(reflection);
+        this.decayRestitution();
+      }
+
+      // 底付近を転がる際の微小な減衰
+      if (this.pos.y > centerPos.y) {
+        this.vel.x *= 0.98;
+      }
+    }
+  }
+
+  // 他の小球との衝突判定
+  checkBallCollision(other) {
+    let delta = p5.Vector.sub(other.pos, this.pos);
+    let dist = delta.mag();
+    let minDist = this.r + other.r;
+
+    if (dist < minDist && dist > 0) {
+      let normal = delta.copy().normalize();
+      let overlap = minDist - dist;
+      
+      // 位置の補正
+      this.pos.sub(p5.Vector.mult(normal, overlap * 0.5));
+      other.pos.add(p5.Vector.mult(normal, overlap * 0.5));
+
+      // 弾性衝突の計算
+      let relativeVelocity = p5.Vector.sub(other.vel, this.vel);
+      let velAlongNormal = relativeVelocity.dot(normal);
+
+      if (velAlongNormal < 0) {
+        // どちらかが動いていれば衝突時に相手を起こす
+        if (this.vel.mag() > 0.5) other.wakeUp();
+        if (other.vel.mag() > 0.5) this.wakeUp();
+
+        if (!this.isStopped || !other.isStopped) {
+          let effRestitution = min(this.restitution, other.restitution);
+          let impulseMagnitude = -(1 + effRestitution) * velAlongNormal / (1/this.mass + 1/other.mass);
+          
+          let impulse = p5.Vector.mult(normal, impulseMagnitude);
+          
+          if (!this.isStopped) this.vel.sub(p5.Vector.mult(impulse, 1 / this.mass));
+          if (!other.isStopped) other.vel.add(p5.Vector.mult(impulse, 1 / other.mass));
+
+          this.decayRestitution();
+          other.decayRestitution();
+        }
+      }
+    }
+  }
+
+  // マウス円との衝突判定
+  checkMouseCollision(mPos, mVel) {
+    let d = p5.Vector.dist(this.pos, mPos);
+    let minDist = this.r + MOUSE_SPHERE_RADIUS;
+
+    if (d < minDist) {
+      this.wakeUp();
+
+      let normal = p5.Vector.sub(this.pos, mPos).normalize();
+      if (d === 0) normal = createVector(0, -1);
+
+      this.pos = p5.Vector.add(mPos, p5.Vector.mult(normal, minDist));
+
+      let pushForce = p5.Vector.mult(mVel, 1.2);
+      this.vel.add(pushForce);
+      this.vel.add(p5.Vector.mult(normal, 2.5));
+    }
+  }
+
+  // 停止解除と反発力の復元
+  wakeUp() {
+    this.isStopped = false;
+    this.sleepTimer = 0;
+    this.restitution = INITIAL_RESTITUTION;
+  }
+}
+</script>
+</body>
+</html>
