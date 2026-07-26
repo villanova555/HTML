@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>3D Solar System Simulator - Double Click Stop Edition</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      color: #fff;
+      font-family: sans-serif;
+    }
+    #ui-container {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 12px 18px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    #ui-container h1 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+    #ui-container p {
+      margin: 3px 0;
+      font-size: 12px;
+      color: #ccc;
+    }
+    #serial-bar {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: bold;
+      background-color: #00c8ff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #000;
+    }
+    button:hover {
+      background-color: #0096c7;
+    }
+    #status {
+      font-size: 12px;
+      color: #00ffcc;
+    }
+    canvas {
+      box-shadow: 0 0 20px rgba(0, 200, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+<div id="ui-container">
+  <h1>惑星シミュレータ (ダブルクリック停止対応版)</h1>
+  <div id="serial-bar">
+    <button id="connect-btn">micro:bit 接続</button>
+    <span id="status">未接続</span>
+  </div>
+  <p>【micro:bit操作】</p>
+  <p> ・Aボタン：前進 / Bボタン：後退</p>
+  <p> ・ロゴタッチ：その場に静止</p>
+  <p> ・A+Bボタン：初期位置・視点にリセット</p>
+  <p> ・左右傾き：視点をゆっくり旋回</p>
+  <p>【マウス操作】</p>
+  <p> ・左ドラッグ（長押し）：前進 / 右ドラッグ（長押し）：後退</p>
+  <p> ・左ダブルクリック：その場に静止（移動スピード0）</p>
+</div>
+
+<script>
+// ==========================================
+// 設定パラメータ
+// ==========================================
+const SCREEN_WIDTH = 2000;
+const SCREEN_HEIGHT = 1024;
+
+// 宇宙船（カメラ）パラメータ
+let camPos;
+let camYaw = 0;   // 左右回転角
+let camPitch = 0; // 上下回転角
+const BASE_MOVE_SPEED = 8; // 基本移動速度
+
+// マウス用状態フラグ
+let isMouseStopped = false; // ダブルクリックによる停止フラグ
+
+// 初期位置・視点パラメータ
+const INIT_CAM_POS = { x: 0, y: -600, z: 1500 };
+const INIT_CAM_YAW = 0;
+const INIT_CAM_PITCH = 0;
+
+// micro:bit センサー値
+let mbAccX = 0;
+let mbBtnState = 0; // 0:なし, 1:A, 2:B, 3:AB, 4:ロゴタッチ
+let isMbConnected = false;
+
+// 惑星データ（名前, 軌道半径, サイズ, 公転速度, 色[R,G,B]）
+const PLANET_DATA = [
+  { name: "水星", orbitR: 200, size: 14, speed: 0.030, color: [170, 170, 180] },
+  { name: "金星", orbitR: 300, size: 22, speed: 0.022, color: [230, 200, 130] },
+  { name: "地球", orbitR: 420, size: 24, speed: 0.016, color: [100, 180, 255] },
+  { name: "火星", orbitR: 560, size: 18, speed: 0.012, color: [240, 100, 60] },
+  { name: "木星", orbitR: 750, size: 55, speed: 0.007, color: [220, 180, 140] },
+  { name: "土星", orbitR: 980, size: 45, speed: 0.004, color: [230, 210, 150], hasRing: true }
+];
+
+let stars = [];
+
+function setup() {
+  createCanvas(SCREEN_WIDTH, SCREEN_HEIGHT, WEBGL);
+  
+  resetCamera();
+  perspective(PI / 3.0, width / height, 10, 20000);
+  
+  for (let i = 0; i < 1000; i++) {
+    stars.push(p5.Vector.random3D().mult(random(4000, 8000)));
+  }
+  
+  // 右クリックメニューの防止
+  document.addEventListener('contextmenu', event => event.preventDefault());
+
+  setupWebSerial();
+}
+
+function draw() {
+  background(5, 5, 12);
+
+  // 宇宙船（カメラ）操作の処理
+  updateCameraControls();
+
+  // ライティング
+  ambientLight(80);
+  pointLight(255, 255, 255, 0, 0, 0);
+
+  drawBackgroundStars();
+
+  // 1. 太陽
+  push();
+  noStroke();
+  emissiveMaterial(255, 200, 50);
+  sphere(80);
+  pop();
+
+  // 2. 軌道線と惑星
+  let angleBase = frameCount;
+
+  for (let p of PLANET_DATA) {
+    drawOrbitRing3D(p.orbitR);
+
+    let currentAngle = angleBase * p.speed;
+    let x = cos(currentAngle) * p.orbitR;
+    let z = sin(currentAngle) * p.orbitR;
+
+    push();
+    translate(x, 0, z);
+
+    push();
+    rotateY(frameCount * 0.02);
+    noStroke();
+    ambientMaterial(p.color[0], p.color[1], p.color[2]);
+    sphere(p.size);
+    pop();
+
+    if (p.hasRing) {
+      drawSaturnRings3D(p.size);
+    }
+
+    pop();
+  }
+}
+
+// カメラリセット
+function resetCamera() {
+  camPos = createVector(INIT_CAM_POS.x, INIT_CAM_POS.y, INIT_CAM_POS.z);
+  camYaw = INIT_CAM_YAW;
+  camPitch = INIT_CAM_PITCH;
+  isMouseStopped = false;
+}
+
+// ------------------------------------------
+// マウスダブルクリックで停止
+// ------------------------------------------
+function doubleClicked() {
+  if (mouseButton === LEFT) {
+    isMouseStopped = true;
+  }
+}
+
+// ------------------------------------------
+// 宇宙船の操作およびカメラ視点更新
+// ------------------------------------------
+function updateCameraControls() {
+  if (isMbConnected) {
+    // 【A+Bボタン】初期位置・視点へリセット
+    if (mbBtnState === 3) {
+      resetCamera();
+    }
+
+    // 【左右の傾き】ゆっくり旋回
+    if (abs(mbAccX) > 100) {
+      let turnSpeed = map(mbAccX, -1024, 1024, -0.015, 0.015);
+      camYaw += turnSpeed;
+    }
+
+  } else {
+    // マウス視点操作
+    camYaw = map(mouseX, 0, width, -PI, PI);
+    camPitch = map(mouseY, 0, height, PI * 0.4, -PI * 0.4);
+  }
+
+  // 視点ベクトル計算
+  let forward = createVector(
+    sin(camYaw) * cos(camPitch),
+    sin(camPitch),
+    -cos(camYaw) * cos(camPitch)
+  ).normalize();
+
+  // 移動速度（デフォルトは0＝静止）
+  let currentSpeed = 0;
+
+  // 【micro:bitでの移動・静止判定】
+  if (isMbConnected) {
+    if (mbBtnState === 1) {        // Aボタン：前進
+      currentSpeed = BASE_MOVE_SPEED;
+    } else if (mbBtnState === 2) { // Bボタン：後退
+      currentSpeed = -BASE_MOVE_SPEED;
+    } else if (mbBtnState === 4) { // ロゴタッチ：完全停止
+      currentSpeed = 0;
+    }
+  }
+
+  // 【マウスでの移動・静止判定】
+  if (mouseIsPressed) {
+    // ボタンを新たに長押しクリックしたら停止解除
+    isMouseStopped = false;
+
+    if (mouseButton === LEFT && !keyIsDown(SHIFT)) {
+      currentSpeed = BASE_MOVE_SPEED;
+    } else if (mouseButton === RIGHT || (mouseIsPressed && keyIsDown(SHIFT))) {
+      currentSpeed = -BASE_MOVE_SPEED;
+    }
+  }
+
+  // ダブルクリックで停止フラグが立っている場合は強制的にスピード0
+  if (isMouseStopped) {
+    currentSpeed = 0;
+  }
+
+  // 計算されたスピードを位置に加算
+  camPos.add(p5.Vector.mult(forward, currentSpeed));
+
+  let target = p5.Vector.add(camPos, forward);
+  camera(
+    camPos.x, camPos.y, camPos.z,
+    target.x, target.y, target.z,
+    0, 1, 0
+  );
+}
+
+// ------------------------------------------
+// WebSerial 通信処理
+// ------------------------------------------
+function setupWebSerial() {
+  const connectBtn = document.getElementById('connect-btn');
+  const statusEl = document.getElementById('status');
+
+  if (!("serial" in navigator)) {
+    statusEl.innerText = "WebSerial非対応ブラウザです";
+    connectBtn.disabled = true;
+    return;
+  }
+
+  connectBtn.addEventListener('click', async () => {
+    try {
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+
+      statusEl.innerText = "接続完了";
+      isMbConnected = true;
+
+      const decoder = new TextDecoderStream();
+      const inputDone = port.readable.pipeTo(decoder.writable);
+      const inputStream = decoder.readable;
+
+      const reader = inputStream.getReader();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        buffer += value;
+        let lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (let line of lines) {
+          parseSerialLine(line.trim());
+        }
+      }
+    } catch (err) {
+      statusEl.innerText = "エラー: " + err;
+    }
+  });
+}
+
+function parseSerialLine(line) {
+  if (!line) return;
+  let parts = line.split(",");
+  
+  if (parts.length >= 2) {
+    let x = parseFloat(parts[0]);
+    let btn = parseInt(parts[1]);
+
+    if (!isNaN(x)) mbAccX = x;
+    if (!isNaN(btn)) mbBtnState = btn;
+  }
+}
+
+// ------------------------------------------
+// 描画補助関数
+// ------------------------------------------
+
+function drawOrbitRing3D(radius) {
+  push();
+  stroke(255, 255, 255, 255);
+  strokeWeight(2.5);
+  noFill();
+  
+  beginShape();
+  const segments = 120;
+  for (let i = 0; i <= segments; i++) {
+    let theta = (TWO_PI / segments) * i;
+    let x = cos(theta) * radius;
+    let z = sin(theta) * radius;
+    vertex(x, 0, z);
+  }
+  endShape();
+  pop();
+}
+
+function drawSaturnRings3D(planetSize) {
+  push();
+  rotateX(PI * 0.35);
+  noFill();
+  
+  let minR = planetSize * 1.3;
+  let maxR = planetSize * 2.2;
+  
+  for (let r = minR; r <= maxR; r += 2.5) {
+    let alpha = map(r, minR, maxR, 220, 80);
+    stroke(230, 200, 140, alpha);
+    strokeWeight(2.0);
+    
+    beginShape();
+    for (let i = 0; i <= 64; i++) {
+      let theta = (TWO_PI / 64) * i;
+      vertex(cos(theta) * r, sin(theta) * r, 0);
+    }
+    endShape();
+  }
+  pop();
+}
+
+function drawBackgroundStars() {
+  push();
+  stroke(255, 255, 255, 200);
+  strokeWeight(2.0);
+  beginShape(POINTS);
+  for (let s of stars) {
+    vertex(s.x, s.y, s.z);
+  }
+  endShape();
+  pop();
+}
+</script>
+</body>
+</html>
