@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>3D Wireframe Tank Game - Adjusted Turn Edition</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #ui-container {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 10;
+      background: rgba(0, 20, 0, 0.85);
+      padding: 12px 18px;
+      border-radius: 6px;
+      border: 1px solid #00ff66;
+      color: #00ff66;
+    }
+    #ui-container h1 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      text-shadow: 0 0 5px #00ff66;
+    }
+    #ui-container p {
+      margin: 3px 0;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="ui-container">
+  <h1>WIRE-FRAME TANK SIMULATOR</h1>
+  <p>【操作方法】</p>
+  <p>・↑ / ↓ キー：前進 / 後退</p>
+  <p>・← キー：左へ超信地旋回（ゆったり）</p>
+  <p>・→ キー：右へ超信地旋回（ゆったり）</p>
+  <p>・スペースキー：主砲発射</p>
+</div>
+
+<script>
+const SCREEN_SIZE = 1024;
+
+let tankPos;
+let tankAngle = 0;
+
+const TANK_SPEED = 4.0;
+// 旋回速度を少し抑えめに調整（0.035 -> 0.020）
+const TANK_ROT_SPEED = 0.020;
+
+let bullets = [];
+let sparks = [];
+
+let mapObjects = [];
+const MAP_SIZE = 2400;
+const GRID_STEP = 80;
+
+function setup() {
+  createCanvas(SCREEN_SIZE, SCREEN_SIZE, WEBGL);
+  tankPos = createVector(0, 0, 0);
+
+  generateMapObjects();
+
+  document.addEventListener('contextmenu', event => event.preventDefault());
+}
+
+function draw() {
+  background(5, 15, 5);
+
+  handleInput();
+
+  // 視点（カメラ）固定
+  camera(0, -90, -180,  0, -20, 200,  0, 1, 0);
+
+  stroke(0, 255, 102);
+  strokeWeight(1.2);
+  noFill();
+
+  // 自機戦車描画
+  drawPlayerTank();
+
+  // 世界全体の旋回と移動
+  push();
+  rotateY(-tankAngle);
+  translate(-tankPos.x, 0, -tankPos.z);
+
+  drawWhiteMeshGrid();
+  drawMapObjects();
+  updateAndDrawBullets();
+  updateAndDrawSparks();
+
+  pop();
+}
+
+function handleInput() {
+  if (keyIsDown(UP_ARROW)) {
+    tankPos.x += sin(tankAngle) * TANK_SPEED;
+    tankPos.z += cos(tankAngle) * TANK_SPEED;
+  }
+  if (keyIsDown(DOWN_ARROW)) {
+    tankPos.x -= sin(tankAngle) * TANK_SPEED;
+    tankPos.z -= cos(tankAngle) * TANK_SPEED;
+  }
+
+  // 旋回方向の反転（←キーで左旋回、→キーで右旋回）
+  if (keyIsDown(LEFT_ARROW)) {
+    tankAngle += TANK_ROT_SPEED;
+  }
+  if (keyIsDown(RIGHT_ARROW)) {
+    tankAngle -= TANK_ROT_SPEED;
+  }
+}
+
+function keyPressed() {
+  if (key === ' ') {
+    fireBullet();
+  }
+}
+
+function drawPlayerTank() {
+  push();
+  translate(0, 0, 0);
+
+  stroke(0, 255, 102);
+  strokeWeight(1.5);
+
+  // 車体
+  push();
+  translate(0, -15, 0);
+  box(45, 20, 70);
+
+  // 履帯（左右）
+  push();
+  translate(26, 5, 0);
+  box(8, 14, 78);
+  pop();
+
+  push();
+  translate(-26, 5, 0);
+  box(8, 14, 78);
+  pop();
+  pop();
+
+  // 砲塔
+  push();
+  translate(0, -32, 0);
+  box(30, 16, 35);
+
+  // 砲身
+  push();
+  translate(0, -2, 28);
+  strokeWeight(2.0);
+  box(5, 5, 35);
+  pop();
+
+  pop();
+
+  pop();
+}
+
+function drawWhiteMeshGrid() {
+  push();
+  stroke(220, 220, 255, 180);
+  strokeWeight(1.0);
+
+  let startX = Math.floor((tankPos.x - MAP_SIZE / 2) / GRID_STEP) * GRID_STEP;
+  let startZ = Math.floor((tankPos.z - MAP_SIZE / 2) / GRID_STEP) * GRID_STEP;
+
+  for (let x = startX; x <= startX + MAP_SIZE; x += GRID_STEP) {
+    line(x, 0, startZ, x, 0, startZ + MAP_SIZE);
+  }
+  for (let z = startZ; z <= startZ + MAP_SIZE; z += GRID_STEP) {
+    line(startX, 0, z, startX + MAP_SIZE, 0, z);
+  }
+  pop();
+}
+
+function generateMapObjects() {
+  for (let i = 0; i < 45; i++) {
+    let type = random() > 0.4 ? 'building' : 'rock';
+    let x = random(-1800, 1800);
+    let z = random(-1800, 1800);
+
+    if (dist(x, z, 0, 0) < 300) continue;
+
+    if (type === 'building') {
+      let w = random(70, 130);
+      let h = random(140, 320);
+      let d = random(70, 130);
+      mapObjects.push({ type, x, z, w, h, d });
+    } else {
+      let r = random(35, 75);
+      mapObjects.push({ type, x, z, r });
+    }
+  }
+}
+
+function drawMapObjects() {
+  push();
+  stroke(0, 220, 90);
+  strokeWeight(1.2);
+
+  for (let obj of mapObjects) {
+    push();
+    translate(obj.x, 0, obj.z);
+
+    if (obj.type === 'building') {
+      translate(0, -obj.h / 2, 0);
+      box(obj.w, obj.h, obj.d);
+    } else if (obj.type === 'rock') {
+      translate(0, -obj.r / 2, 0);
+      sphere(obj.r, 6, 4);
+    }
+    pop();
+  }
+  pop();
+}
+
+function fireBullet() {
+  let muzzleX = tankPos.x + sin(tankAngle) * 48;
+  let muzzleY = -34;
+  let muzzleZ = tankPos.z + cos(tankAngle) * 48;
+
+  let speed = 16;
+  let velX = sin(tankAngle) * speed;
+  let velY = -2.2;
+  let velZ = cos(tankAngle) * speed;
+
+  bullets.push({
+    pos: createVector(muzzleX, muzzleY, muzzleZ),
+    vel: createVector(velX, velY, velZ),
+    alive: true
+  });
+}
+
+function updateAndDrawBullets() {
+  const gravity = 0.14;
+
+  push();
+  stroke(255, 255, 255);
+  fill(255, 255, 255);
+
+  for (let b of bullets) {
+    if (!b.alive) continue;
+
+    b.pos.add(b.vel);
+    b.vel.y += gravity;
+
+    push();
+    translate(b.pos.x, b.pos.y, b.pos.z);
+    sphere(4, 4, 4);
+    pop();
+
+    if (b.pos.y >= 0) {
+      b.pos.y = 0;
+      b.alive = false;
+      createSparks(b.pos);
+      continue;
+    }
+
+    for (let obj of mapObjects) {
+      if (obj.type === 'building') {
+        if (abs(b.pos.x - obj.x) < obj.w / 2 &&
+            abs(b.pos.z - obj.z) < obj.d / 2 &&
+            b.pos.y > -obj.h) {
+          b.alive = false;
+          createSparks(b.pos);
+          break;
+        }
+      } else if (obj.type === 'rock') {
+        if (dist(b.pos.x, b.pos.z, obj.x, obj.z) < obj.r && b.pos.y > -obj.r) {
+          b.alive = false;
+          createSparks(b.pos);
+          break;
+        }
+      }
+    }
+  }
+
+  bullets = bullets.filter(b => b.alive);
+  pop();
+}
+
+function createSparks(pos) {
+  let count = Math.floor(random(8, 14));
+  for (let i = 0; i < count; i++) {
+    let dir = p5.Vector.random3D();
+    dir.y = -abs(dir.y);
+    let speed = random(6, 14);
+    sparks.push({
+      pos: pos.copy(),
+      vel: dir.mult(speed),
+      life: 18
+    });
+  }
+}
+
+function updateAndDrawSparks() {
+  push();
+  strokeWeight(2.0);
+
+  for (let s of sparks) {
+    s.pos.add(s.vel);
+    s.life--;
+
+    let alpha = map(s.life, 0, 18, 0, 255);
+    stroke(255, 255, 160, alpha);
+
+    let nextPos = p5.Vector.add(s.pos, p5.Vector.mult(s.vel, 0.5));
+    line(s.pos.x, s.pos.y, s.pos.z, nextPos.x, nextPos.y, nextPos.z);
+  }
+
+  sparks = sparks.filter(s => s.life > 0);
+  pop();
+}
+</script>
+</body>
+</html>
