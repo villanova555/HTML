@@ -1,0 +1,1969 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>3D戦車対戦ゲーム - 複数台＆レベル切替版</title>
+<!-- com -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #game-container {
+    position: relative;
+    width: 960px;
+    height: 540px;
+    background-color: #000000;
+    border: 2px solid #444444;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #damage-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 80;
+    transition: opacity 0.1s ease-out;
+  }
+
+  #win-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 64px;
+    font-weight: bold;
+    color: #ffcc00;
+    text-shadow: 0 0 20px #ff6600;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 110;
+    transition: opacity 0.3s ease-in-out;
+  }
+
+  #win-time {
+    font-size: 24px;
+    color: #ffffff;
+    text-shadow: 0 0 10px #000000;
+    margin-top: 10px;
+  }
+
+  #win-stats {
+    font-size: 20px;
+    color: #00ffcc;
+    text-shadow: 0 0 10px #000000;
+    margin-top: 8px;
+  }
+
+  #header-ui {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid #555;
+  }
+
+  .ui-btn {
+    background-color: rgba(51, 51, 51, 0.8);
+    color: #ffffff;
+    border: 1px solid #666666;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .ui-btn:hover {
+    background-color: #555555;
+  }
+
+  .ui-btn.active-state {
+    background-color: rgba(0, 150, 255, 0.7);
+    border-color: #00aaff;
+  }
+
+  #guide {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: none;
+    z-index: 90;
+    border: 1px solid #444;
+    display: none;
+  }
+
+  #enemy-info {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 8px 14px;
+    border-radius: 5px;
+    font-size: 12px;
+    z-index: 100;
+    border: 1px solid #444;
+    text-align: center;
+    transition: all 0.2s ease;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: bold;
+    border: 1px solid #666;
+  }
+
+  #canvas-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  #touch-controls {
+    display: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 160px;
+    pointer-events: none;
+    z-index: 90;
+  }
+
+  .control-group {
+    position: absolute;
+    bottom: 15px;
+    display: flex;
+    gap: 10px;
+    pointer-events: auto;
+  }
+
+  .left-group {
+    left: 15px;
+    display: grid;
+    grid-template-columns: repeat(3, 50px);
+    grid-template-rows: repeat(2, 50px);
+    gap: 8px;
+  }
+
+  .right-group {
+    right: 15px;
+    display: grid;
+    grid-template-columns: repeat(3, 50px);
+    grid-template-rows: repeat(2, 50px);
+    gap: 8px;
+  }
+
+  .virtual-btn {
+    width: 50px;
+    height: 50px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+
+  .virtual-btn.circle {
+    border-radius: 50%;
+  }
+
+  .virtual-btn:active, .virtual-btn.active {
+    background-color: rgba(255, 200, 0, 0.7);
+    border-color: #ffcc00;
+  }
+
+  body.mobile-mode #guide {
+    font-size: 10px;
+    padding: 6px;
+  }
+
+  body.mobile-mode #touch-controls {
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div id="damage-overlay"></div>
+  <div id="win-overlay">
+    <div>Win</div>
+    <div id="win-time">経過時間: 0.0秒</div>
+    <div id="win-stats">被弾: 0 / 発射: 0</div>
+  </div>
+
+  <div id="header-ui">
+    <button id="toggle-mode-btn" class="ui-btn">モード: PC [D]</button>
+    <button id="display-mode-btn" class="ui-btn">表示</button>
+    <button id="landing-btn" class="ui-btn">照準</button>
+    <button id="break-btn" class="ui-btn">破壊</button>
+    <button id="fullscreen-btn" class="ui-btn">全画面</button>
+    <button id="help-btn" class="ui-btn">Help [H]</button>
+  </div>
+
+  <div id="guide">
+    <div id="guide-content">
+      ・移動: [↑][↓][←][→]<br>
+      ・砲塔左右: [Delete]左 / [End]右<br>
+      ・砲塔上下: [PageUp]上 / [PageDown]下<br>
+      ・主砲発射: [Space] / 破壊切替: [B]<br>
+      ・精密操作([Shift]長押): 有効<br>
+      ・ニュートラル復帰: [Home] / 照準表示切替: [+]<br>
+      ・Help表示切替: [H]
+    </div>
+  </div>
+
+  <div id="enemy-info">
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span>残敵:</span>
+      <div id="enemy-dots-container" style="display: flex; gap: 6px; align-items: center;"></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; border-left: 1px solid #555; padding-left: 10px;">
+      <div id="icon-speed" class="status-icon" title="移動速度 (通常)">通</div>
+      <div id="icon-break" class="status-icon" title="オブジェクト破壊 (不可)" style="color: #ff6666; border-color: #ff6666;">壊</div>
+    </div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="touch-controls">
+    <div class="control-group left-group">
+      <div></div>
+      <div class="virtual-btn" data-key="ArrowUp">↑</div>
+      <div></div>
+      <div class="virtual-btn" data-key="ArrowLeft">←</div>
+      <div class="virtual-btn" data-key="ArrowDown">↓</div>
+      <div class="virtual-btn" data-key="ArrowRight">→</div>
+    </div>
+
+    <div class="control-group right-group">
+      <div class="virtual-btn" data-key="Delete">砲左</div>
+      <div class="virtual-btn circle" data-key="Space" style="background-color: rgba(255,0,0,0.4);">発射</div>
+      <div class="virtual-btn" data-key="End">砲右</div>
+      <div class="virtual-btn" data-key="PageUp">砲上</div>
+      <div class="virtual-btn" data-key="Home">復帰</div>
+      <div class="virtual-btn" data-key="PageDown">砲下</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let audioCtx = null;
+
+  function initAudioOnUserAction() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) {
+        if (!audioCtx) {
+          audioCtx = new AudioContext();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }
+    } catch (e) {}
+  }
+
+  window.addEventListener('click', initAudioOnUserAction, { once: true });
+  window.addEventListener('keydown', initAudioOnUserAction, { once: true });
+  window.addEventListener('touchstart', initAudioOnUserAction, { once: true });
+
+  function createNoiseBuffer() {
+    if (!audioCtx || audioCtx.state !== 'running') return null;
+    try {
+      const bufferSize = audioCtx.sampleRate * 0.5;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      return buffer;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function playShootSound() {
+    initAudioOnUserAction();
+    if (!audioCtx || audioCtx.state !== 'running') return;
+    try {
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const oscGain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(30, now + 0.25);
+      oscGain.gain.setValueAtTime(0.5, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      osc.connect(oscGain);
+      oscGain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
+
+      const noiseBuffer = createNoiseBuffer();
+      if (noiseBuffer) {
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, now);
+        filter.frequency.linearRampToValueAtTime(100, now + 0.3);
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.7, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+        noise.stop(now + 0.3);
+      }
+    } catch (e) {}
+  }
+
+  function playExplosionSound() {
+    initAudioOnUserAction();
+    if (!audioCtx || audioCtx.state !== 'running') return;
+    try {
+      const now = audioCtx.currentTime;
+      const noiseBuffer = createNoiseBuffer();
+      if (noiseBuffer) {
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1200, now);
+        filter.frequency.exponentialRampToValueAtTime(80, now + 0.6);
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(1.0, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+        noise.stop(now + 0.6);
+      }
+
+      const sub = audioCtx.createOscillator();
+      const subGain = audioCtx.createGain();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(120, now);
+      sub.frequency.exponentialRampToValueAtTime(20, now + 0.5);
+      subGain.gain.setValueAtTime(0.8, now);
+      subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+      sub.connect(subGain);
+      subGain.connect(audioCtx.destination);
+      sub.start(now);
+      sub.stop(now + 0.5);
+    } catch (e) {}
+  }
+
+  function playHitGroundSound() {
+    initAudioOnUserAction();
+    if (!audioCtx || audioCtx.state !== 'running') return;
+    try {
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const oscGain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(90, now);
+      osc.frequency.exponentialRampToValueAtTime(25, now + 0.15);
+      oscGain.gain.setValueAtTime(0.4, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+      osc.connect(oscGain);
+      oscGain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } catch (e) {}
+  }
+
+  const BULLET_PARAMS = {
+    speed: 0.80,
+    gravity: 0.012,
+    cooldown: 400
+  };
+
+  const TANK_PITCH_LIMIT = {
+    min: THREE.MathUtils.degToRad(-10),
+    max: THREE.MathUtils.degToRad(15)
+  };
+
+  const moveSpeed = 0.12;
+  
+  const normalRotateSpeed = 0.03;
+  const normalTurretRotateSpeed = 0.015;
+  const shiftRotateSpeed = 0.005;
+  const shiftTurretRotateSpeed = 0.003;
+  const baseBarrelPitchSpeed = 0.02;
+
+  let playerHits = 0;
+  let playerShots = 0;
+  let showLandingMarker = false;
+  let indestructibleMode = true;
+  let showGuide = false;
+  let revealColorsMode = false; // デフォルトOFF
+
+  let isMobileMode = false;
+  let isGameFinished = false;
+  let restartTimeoutId = null;
+  let gameStartTime = Date.now();
+
+  const toggleBtn = document.getElementById('toggle-mode-btn');
+  const displayModeBtn = document.getElementById('display-mode-btn');
+  const landingBtn = document.getElementById('landing-btn');
+  const breakBtn = document.getElementById('break-btn');
+  const fullscreenBtn = document.getElementById('fullscreen-btn');
+  const helpBtn = document.getElementById('help-btn');
+  const guideEl = document.getElementById('guide');
+  const guideContent = document.getElementById('guide-content');
+  const body = document.body;
+
+  const elEnemyDotsContainer = document.getElementById('enemy-dots-container');
+  const iconSpeed = document.getElementById('icon-speed');
+  const iconBreak = document.getElementById('icon-break');
+  const damageOverlay = document.getElementById('damage-overlay');
+  const winOverlay = document.getElementById('win-overlay');
+  const winTimeEl = document.getElementById('win-time');
+  const winStatsEl = document.getElementById('win-stats');
+
+  function updateGuideVisibility() {
+    if (showGuide) {
+      guideEl.style.display = 'block';
+      helpBtn.classList.add('active-state');
+    } else {
+      guideEl.style.display = 'none';
+      helpBtn.classList.remove('active-state');
+    }
+  }
+
+  function toggleGuide() {
+    showGuide = !showGuide;
+    updateGuideVisibility();
+  }
+
+  helpBtn.addEventListener('click', toggleGuide);
+
+  function toggleMode() {
+    isMobileMode = !isMobileMode;
+    if (isMobileMode) {
+      body.classList.add('mobile-mode');
+      toggleBtn.textContent = 'モード: スマホ [D]';
+      guideContent.innerHTML = '・移動: 左十字キー<br>・砲塔: 砲左/砲右/砲上/砲下<br>・攻撃: 発射 / 復帰<br>・モード切替: [D]<br>・Help表示切替: [H]';
+    } else {
+      body.classList.remove('mobile-mode');
+      toggleBtn.textContent = 'モード: PC [D]';
+      guideContent.innerHTML = '・移動: [↑][↓][←][→]<br>・砲塔左右: [Delete]左 / [End]右<br>・砲塔上下: [PgUp]上 / [PgDn]下<br>・主砲発射: [Space] / 破壊切替: [B]<br>・精密操作([Shift]長押): 有効<br>・ニュートラル復帰: [Home] / 照準表示切替: [+]<br>・Help表示切替: [H]';
+    }
+  }
+
+  toggleBtn.addEventListener('click', toggleMode);
+
+  function toggleDisplayMode() {
+    revealColorsMode = !revealColorsMode;
+    if (revealColorsMode) {
+      displayModeBtn.classList.add('active-state');
+    } else {
+      displayModeBtn.classList.remove('active-state');
+    }
+    updateAllTanksAppearance();
+  }
+
+  displayModeBtn.addEventListener('click', toggleDisplayMode);
+
+  function toggleLandingMarker() {
+    showLandingMarker = !showLandingMarker;
+    if (showLandingMarker) {
+      landingBtn.classList.add('active-state');
+    } else {
+      landingBtn.classList.remove('active-state');
+    }
+  }
+
+  landingBtn.addEventListener('click', toggleLandingMarker);
+
+  function toggleIndestructible() {
+    indestructibleMode = !indestructibleMode;
+    if (indestructibleMode) {
+      breakBtn.classList.remove('active-state');
+    } else {
+      breakBtn.classList.add('active-state');
+    }
+  }
+
+  breakBtn.addEventListener('click', toggleIndestructible);
+
+  fullscreenBtn.addEventListener('click', () => {
+    const container = document.getElementById('game-container');
+    if (!document.fullscreenElement) {
+      if (container.requestFullscreen) container.requestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+    }
+  });
+
+  const virtualButtons = document.querySelectorAll('.virtual-btn');
+
+  function simulateKeyEvent(type, code) {
+    const event = new KeyboardEvent(type, {
+      code: code,
+      key: code,
+      bubbles: true,
+      cancelable: true
+    });
+    window.dispatchEvent(event);
+  }
+
+  virtualButtons.forEach(btn => {
+    const key = btn.getAttribute('data-key');
+    if (!key) return;
+
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      initAudioOnUserAction();
+      btn.classList.add('active');
+      simulateKeyEvent('keydown', key);
+    });
+
+    btn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      btn.classList.remove('active');
+      simulateKeyEvent('keyup', key);
+    });
+
+    btn.addEventListener('mousedown', () => {
+      initAudioOnUserAction();
+      btn.classList.add('active');
+      simulateKeyEvent('keydown', key);
+    });
+    btn.addEventListener('mouseup', () => {
+      btn.classList.remove('active');
+      simulateKeyEvent('keyup', key);
+    });
+  });
+
+  const keys = {};
+  let homeKeyProcessed = false;
+  let plusKeyProcessed = false;
+  let bKeyProcessed = false;
+  let hKeyProcessed = false;
+
+  window.addEventListener('keydown', (e) => {
+    initAudioOnUserAction();
+    keys[e.code] = true;
+
+    if (e.code === 'KeyD') {
+      toggleMode();
+    }
+
+    if (e.code === 'KeyB') {
+      if (!bKeyProcessed) {
+        toggleIndestructible();
+        bKeyProcessed = true;
+      }
+    }
+
+    if (e.code === 'KeyH') {
+      if (!hKeyProcessed) {
+        toggleGuide();
+        hKeyProcessed = true;
+      }
+    }
+
+    if (e.code === 'Home') {
+      if (!homeKeyProcessed) {
+        turretGroup.rotation.y = 0;
+        barrelPivot.rotation.x = 0;
+        homeKeyProcessed = true;
+      }
+    }
+
+    if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+      if (!plusKeyProcessed) {
+        toggleLandingMarker();
+        plusKeyProcessed = true;
+      }
+    }
+
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Home", "ShiftLeft", "ShiftRight", "Equal", "NumpadAdd", "KeyB", "KeyH"].includes(e.code)) {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+    if (e.code === 'Home') {
+      homeKeyProcessed = false;
+    }
+    if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+      plusKeyProcessed = false;
+    }
+    if (e.code === 'KeyB') {
+      bKeyProcessed = false;
+    }
+    if (e.code === 'KeyH') {
+      hKeyProcessed = false;
+    }
+  });
+
+  window.addEventListener('blur', () => {
+    for (let k in keys) {
+      keys[k] = false;
+    }
+    homeKeyProcessed = false;
+    plusKeyProcessed = false;
+    bKeyProcessed = false;
+    hKeyProcessed = false;
+  });
+
+  const container = document.getElementById('canvas-container');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+  scene.fog = new THREE.Fog(0x87ceeb, 30, 180);
+
+  const camera = new THREE.PerspectiveCamera(65, 960 / 540, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(960, 540);
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(40, 60, 20);
+  dirLight.castShadow = true;
+  scene.add(dirLight);
+
+  const floorWidth = 200;
+  const floorSegments = 40;
+  const floorGeo = new THREE.PlaneGeometry(floorWidth, floorWidth, floorSegments, floorSegments);
+  floorGeo.rotateX(-Math.PI / 2);
+
+  const hillsData = [
+    { x: -45, z: 45, radius: 25, height: 5 + Math.random() * 10 },
+    { x: 50, z: -40, radius: 30, height: 5 + Math.random() * 10 },
+    { x: -35, z: -45, radius: 22, height: -(5 + Math.random() * 10) },
+    { x: 40, z: 45, radius: 28, height: 5 + Math.random() * 10 },
+    { x: 0, z: 0, radius: 35, height: 5 + Math.random() * 5 }
+  ];
+
+  const posAttr = floorGeo.attributes.position;
+  for (let i = 0; i < posAttr.count; i++) {
+    const vx = posAttr.getX(i);
+    const vz = posAttr.getZ(i);
+    let totalHeight = 0;
+
+    hillsData.forEach(hill => {
+      const dx = vx - hill.x;
+      const dz = vz - hill.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < hill.radius) {
+        const factor = Math.cos((dist / hill.radius) * (Math.PI / 2));
+        totalHeight += hill.height * Math.max(0, factor);
+      }
+    });
+
+    posAttr.setY(i, totalHeight);
+  }
+  floorGeo.computeVertexNormals();
+
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x4d6e38, roughness: 0.9 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const wireframeGeo = floorGeo.clone();
+  const wireframeMat = new THREE.MeshBasicMaterial({ color: 0x334422, wireframe: true });
+  const terrainMesh = new THREE.Mesh(wireframeGeo, wireframeMat);
+  terrainMesh.position.y = 0.05;
+  scene.add(terrainMesh);
+
+  function getTerrainHeight(x, z) {
+    let totalHeight = 0;
+    hillsData.forEach(hill => {
+      const dx = x - hill.x;
+      const dz = z - hill.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < hill.radius) {
+        const factor = Math.cos((dist / hill.radius) * (Math.PI / 2));
+        totalHeight += hill.height * Math.max(0, factor);
+      }
+    });
+    return totalHeight;
+  }
+
+  const markerGroup = new THREE.Group();
+  const markerMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+  const hBarGeo = new THREE.BoxGeometry(1.2, 0.02, 0.25);
+  const vBarGeo = new THREE.BoxGeometry(0.25, 0.02, 1.2);
+  const hBar = new THREE.Mesh(hBarGeo, markerMat);
+  const vBar = new THREE.Mesh(vBarGeo, markerMat);
+  markerGroup.add(hBar);
+  markerGroup.add(vBar);
+  markerGroup.position.y = 0.05;
+  scene.add(markerGroup);
+  markerGroup.visible = false;
+
+  let obstacleObjects = [];
+
+  function createObstacles() {
+    obstacleObjects.forEach(obs => {
+      scene.remove(obs.mesh);
+      obs.mesh.geometry.dispose();
+      obs.mesh.material.dispose();
+    });
+    obstacleObjects = [];
+
+    const minHeight = 6.0;
+    const count = 16;
+
+    for (let i = 0; i < count; i++) {
+      let valid = false;
+      let px = 0, pz = 0;
+      while (!valid) {
+        px = (Math.random() - 0.5) * 140;
+        pz = (Math.random() - 0.5) * 140;
+        if (Math.sqrt(px * px + pz * pz) > 18) {
+          valid = true;
+          for (let existing of obstacleObjects) {
+            const edx = px - existing.x;
+            const edz = pz - existing.z;
+            if (Math.sqrt(edx * edx + edz * edz) < 12) {
+              valid = false;
+              break;
+            }
+          }
+        }
+      }
+
+      const types = ['box', 'dome', 'pyramid', 'cylinder'];
+      const type = types[Math.floor(Math.random() * types.length)];
+      const radius = 3.0 + Math.random() * 2.5;
+      const height = minHeight + Math.random() * 24.0;
+      const randomColor = Math.floor(Math.random() * 0xffffff);
+      const mat = new THREE.MeshStandardMaterial({ color: randomColor, roughness: 0.7 });
+
+      const groundH = getTerrainHeight(px, pz);
+      let mesh;
+      let collisionRadius = radius;
+
+      // 厳格な衝突判定（上空の透明部分を排除するため、実形状に基づいた正確なパラメータを設定）
+      let geomBottomY, geomTopY;
+
+      if (type === 'box') {
+        const geo = new THREE.BoxGeometry(radius * 1.5, height, radius * 1.5);
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(px, groundH - 5 + height / 2, pz);
+        collisionRadius = radius * 1.1;
+        geomBottomY = groundH - 5;
+        geomTopY = groundH - 5 + height;
+      } else if (type === 'dome') {
+        const geo = new THREE.SphereGeometry(radius, 16, 16);
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(px, groundH - (radius * 0.5) + (radius * 0.7), pz);
+        collisionRadius = radius * 0.9;
+        geomBottomY = groundH;
+        geomTopY = groundH + radius * 1.4;
+      } else if (type === 'pyramid') {
+        const geo = new THREE.ConeGeometry(radius, height, 4);
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(px, groundH - 5 + height / 2, pz);
+        collisionRadius = radius * 0.65;
+        geomBottomY = groundH - 5;
+        geomTopY = groundH - 5 + height;
+      } else if (type === 'cylinder') {
+        const geo = new THREE.CylinderGeometry(radius, radius, height, 16);
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(px, groundH - 5 + height / 2, pz);
+        collisionRadius = radius;
+        geomBottomY = groundH - 5;
+        geomTopY = groundH - 5 + height;
+      }
+
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+
+      obstacleObjects.push({
+        mesh: mesh,
+        x: px,
+        z: pz,
+        radius: collisionRadius,
+        bottomY: geomBottomY,
+        topY: geomTopY,
+        type: type
+      });
+    }
+  }
+
+  createObstacles();
+
+  function createCamouflageTexture(baseColorHex, isGray = false) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+
+    let baseColorStr = '#3b4d28';
+    let spotColors = ['#283618', '#606c38', '#2d3a1e', '#1e2614'];
+
+    if (isGray) {
+      baseColorStr = '#888888';
+      spotColors = ['#555555', '#aaaaaa', '#666666', '#777777'];
+    } else if (baseColorHex) {
+      const c = new THREE.Color(baseColorHex);
+      baseColorStr = `#${c.getHexString()}`;
+      spotColors = [
+        `#${c.clone().multiplyScalar(0.7).getHexString()}`,
+        `#${c.clone().multiplyScalar(1.2).getHexString()}`,
+        `#${c.clone().multiplyScalar(0.5).getHexString()}`,
+        `#${c.clone().multiplyScalar(0.9).getHexString()}`
+      ];
+    }
+
+    ctx.fillStyle = baseColorStr;
+    ctx.fillRect(0, 0, 512, 512);
+
+    for (let i = 0; i < 25; i++) {
+      ctx.fillStyle = spotColors[Math.floor(Math.random() * spotColors.length)];
+      ctx.beginPath();
+      const cx = Math.random() * 512;
+      const cy = Math.random() * 512;
+      const r = 40 + Math.random() * 80;
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+  }
+
+  const camoTexture = createCamouflageTexture(null, false);
+
+  function createTankMesh(colorHex, isPlayer = false, baseColorForTexture = null) {
+    const group = new THREE.Group();
+
+    let bodyMat, turretMat;
+    const tex = revealColorsMode ? createCamouflageTexture(baseColorForTexture || colorHex) : createCamouflageTexture(null, true);
+    
+    if (isPlayer) {
+      bodyMat = new THREE.MeshStandardMaterial({ map: camoTexture, roughness: 0.6 });
+      turretMat = new THREE.MeshStandardMaterial({ map: camoTexture, roughness: 0.6 });
+    } else {
+      bodyMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
+      turretMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
+    }
+
+    const bodyGeo = new THREE.BoxGeometry(3, 1.2, 4.5);
+    const tankBody = new THREE.Mesh(bodyGeo, bodyMat);
+    tankBody.position.y = 0.8;
+    tankBody.castShadow = true;
+    group.add(tankBody);
+
+    const trackGeo = new THREE.BoxGeometry(0.6, 0.9, 4.7);
+    const trackMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+    const trackL = new THREE.Mesh(trackGeo, trackMat);
+    trackL.position.set(-1.7, 0.5, 0);
+    trackL.castShadow = true;
+    group.add(trackL);
+
+    const trackR = trackL.clone();
+    trackR.position.x = 1.7;
+    group.add(trackR);
+
+    const turretGroup = new THREE.Group();
+    turretGroup.position.set(0, 1.5, 0.2);
+    group.add(turretGroup);
+
+    const turretGeo = new THREE.CylinderGeometry(1.2, 1.4, 0.9, 12);
+    const turretMesh = new THREE.Mesh(turretGeo, turretMat);
+    turretMesh.castShadow = true;
+    turretGroup.add(turretMesh);
+
+    const barrelPivot = new THREE.Group();
+    barrelPivot.position.set(0, 0.1, 0);
+    turretGroup.add(barrelPivot);
+
+    const barrelGeo = new THREE.CylinderGeometry(0.18, 0.18, 3, 12);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x1a2115 });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0, 1.5);
+    barrel.castShadow = true;
+    barrelPivot.add(barrel);
+
+    const pinGroup = new THREE.Group();
+    pinGroup.position.set(0, 15, 0);
+    
+    const markerColorHex = revealColorsMode ? colorHex : 0xffffff;
+    const coneGeo = new THREE.ConeGeometry(0.8, 2.5, 8);
+    const coneMat = new THREE.MeshBasicMaterial({ color: markerColorHex });
+    const coneMesh = new THREE.Mesh(coneGeo, coneMat);
+    coneMesh.rotation.x = Math.PI;
+    pinGroup.add(coneMesh);
+
+    const poleGeo = new THREE.CylinderGeometry(0.08, 0.08, 10, 6);
+    const poleMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const poleMesh = new THREE.Mesh(poleGeo, poleMat);
+    poleMesh.position.y = 5.5;
+    pinGroup.add(poleMesh);
+
+    group.add(pinGroup);
+
+    return {
+      group,
+      turretGroup,
+      barrelPivot,
+      bodyMat,
+      turretMat,
+      pinGroup
+    };
+  }
+
+  const playerTank = createTankMesh(0x2e3b23, true);
+  const tankGroup = playerTank.group;
+  const turretGroup = playerTank.turretGroup;
+  const barrelPivot = playerTank.barrelPivot;
+  playerTank.pinGroup.visible = false;
+  scene.add(tankGroup);
+
+  const ENEMY_TYPE_CONFIGS = {
+    1: { name: 'T1(緑)', color: 0x00cc00, cssColor: '#00ff66' },
+    2: { name: 'T2(赤)', color: 0xff2222, cssColor: '#ff4444' },
+    3: { name: 'T3(青)', color: 0x2288ff, cssColor: '#44aaff' },
+    4: { name: 'T4(黄)', color: 0xffdd00, cssColor: '#ffdd00' },
+    5: { name: 'T5(紫)', color: 0xaa22ff, cssColor: '#cc44ff' }
+  };
+
+  let enemiesList = [];
+  let screenShakeIntensity = 0;
+  const bullets = [];
+  const particles = [];
+  const smokeParticles = [];
+  let lastShootTime = 0;
+
+  class EnemyInstance {
+    constructor(id, type = null) {
+      this.id = id;
+      this.type = (type === null)
+          ? Math.floor(Math.random() * 5) + 1
+          : type;
+      this.originalType = this.type;
+      this.isTransformed = false;
+      this.transformCooldown = 0;
+
+      const baseCol = ENEMY_TYPE_CONFIGS[this.type].color;
+      this.tankData = createTankMesh(baseCol, false, baseCol);
+      this.group = this.tankData.group;
+      this.turretGroup = this.tankData.turretGroup;
+      this.barrelPivot = this.tankData.barrelPivot;
+      this.pinGroup = this.tankData.pinGroup;
+
+      this.state = 'active';
+      this.canShoot = true;
+      this.vel = new THREE.Vector3();
+      this.rotVel = new THREE.Vector3();
+      this.smokeTimer = 0;
+      this.aiTimer = Math.floor(Math.random() * 100);
+
+      this.t3Mode = 'approach';
+      this.t3BurstCount = 0;
+      this.t3BurstTimer = 0;
+      this.t3FleeTimer = 0;
+
+      this.t2Mode = 'charge';
+      this.t2CooldownTimer = 0;
+      this.t2EngagementTimer = 0; // 赤戦車の接近後まとわりつき時間計測用
+
+      this.t4Mode = 'flank';
+      this.t4Timer = 0;
+
+      this.resetPosition();
+      scene.add(this.group);
+    }
+
+    resetPosition() {
+      let spawnX = 0;
+      let spawnZ = 0;
+      let valid = false;
+
+      let forceHill = false;
+      if (this.type === 1) {
+        forceHill = Math.random() < 0.5;
+      }
+
+      while (!valid) {
+        spawnX = (Math.random() - 0.5) * 120;
+        spawnZ = (Math.random() - 0.5) * 120;
+
+        const pos2D = new THREE.Vector2(spawnX, spawnZ);
+        const playerPos2D = new THREE.Vector2(tankGroup.position.x, tankGroup.position.z);
+
+        if (pos2D.distanceTo(playerPos2D) > 25) {
+          const hVal = Math.abs(getTerrainHeight(spawnX, spawnZ));
+          const isCurrentHill = hVal >= 2.5;
+
+          if (this.type === 1) {
+            if (forceHill && !isCurrentHill) continue;
+            if (!forceHill && isCurrentHill) continue;
+          }
+
+          valid = true;
+          for (let obs of obstacleObjects) {
+            const odx = spawnX - obs.x;
+            const odz = spawnZ - obs.z;
+            if (Math.sqrt(odx * odx + odz * odz) < (obs.radius + 3.0)) {
+              valid = false;
+              break;
+            }
+          }
+        }
+      }
+
+      this.group.position.set(spawnX, getTerrainHeight(spawnX, spawnZ), spawnZ);
+      this.group.rotation.set(0, Math.random() * Math.PI * 2, 0);
+      updateTankOrientation(this.group);
+      this.turretGroup.rotation.y = 0;
+      this.barrelPivot.rotation.x = 0;
+      this.t3Mode = 'approach';
+      this.t3BurstCount = 0;
+      this.t2Mode = 'charge';
+      this.t2CooldownTimer = 0;
+      this.t2EngagementTimer = 0;
+      this.t4Mode = 'flank';
+      this.t4Timer = 0;
+      this.isTransformed = false;
+      this.transformCooldown = 0;
+      this.pinGroup.visible = true;
+    }
+
+    updateAppearance() {
+      let activeColor = ENEMY_TYPE_CONFIGS[this.type].color;
+      if (this.type === 5 && this.isTransformed) {
+        activeColor = ENEMY_TYPE_CONFIGS[2].color;
+      }
+      const tex = revealColorsMode ? createCamouflageTexture(activeColor) : createCamouflageTexture(null, true);
+      this.tankData.bodyMat.map = tex;
+      this.tankData.bodyMat.needsUpdate = true;
+      this.tankData.turretMat.map = tex;
+      this.tankData.turretMat.needsUpdate = true;
+
+      const markerColor = revealColorsMode ? activeColor : 0xffffff;
+      this.pinGroup.children[0].material.color.setHex(markerColor);
+    }
+
+    updateAI() {
+      if (this.state !== 'active') return;
+
+      this.aiTimer++;
+
+      const dx = tankGroup.position.x - this.group.position.x;
+      const dz = tankGroup.position.z - this.group.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      if (this.originalType === 5) {
+        if (this.transformCooldown > 0) {
+          this.transformCooldown--;
+          if (this.transformCooldown === 0) {
+            this.isTransformed = false;
+            this.type = 5;
+            this.updateAppearance();
+          }
+        } else if (!this.isTransformed && dist < 35.0) {
+          this.isTransformed = true;
+          this.type = 2;
+          this.updateAppearance();
+        }
+      }
+
+      let targetMoveAngle = this.group.rotation.y;
+      let targetTurretWorldAngle = Math.atan2(dx, dz);
+      let desiredMoveSpeed = moveSpeed;
+      let allowShoot = true;
+
+      let nearestObs = null;
+      let minObsDist = Infinity;
+      obstacleObjects.items = obstacleObjects.items || obstacleObjects;
+      obstacleObjects.forEach(obs => {
+        const odx = obs.x - this.group.position.x;
+        const odz = obs.z - this.group.position.z;
+        const od = Math.sqrt(odx * odx + odz * odz);
+        if (od < minObsDist) {
+          minObsDist = od;
+          nearestObs = obs;
+        }
+      });
+
+      const effectiveType = this.type;
+
+      if (effectiveType === 1) {
+        if (this.aiTimer % 180 < 90) {
+          targetMoveAngle = Math.atan2(dx, dz);
+          desiredMoveSpeed = moveSpeed * 1.0;
+        } else {
+          targetMoveAngle = Math.atan2(-dx, -dz);
+          desiredMoveSpeed = moveSpeed * 0.9;
+        }
+
+      } else if (effectiveType === 2) {
+        // 赤戦車：接近後10秒以上まとわりつかないように改善（約600フレーム＝10秒で攻撃中止し一旦離れる）[cite: 3]
+        if (this.t2Mode === 'charge') {
+          targetMoveAngle = Math.atan2(dx, dz);
+          desiredMoveSpeed = moveSpeed * 1.6;
+
+          if (dist < 6.0) {
+            this.t2EngagementTimer++;
+          }
+
+          if (dist < 4.0 || this.t2EngagementTimer > 600) {
+            if (dist < 4.0) {
+              triggerPlayerHitEffect();
+            }
+            this.t2Mode = 'flee';
+            this.t2EngagementTimer = 0;
+            if (this.originalType === 5 && this.isTransformed) {
+              this.transformCooldown = 180;
+            }
+          }
+        } else if (this.t2Mode === 'flee') {
+          targetMoveAngle = Math.atan2(-dx, -dz);
+          desiredMoveSpeed = moveSpeed * 1.6;
+
+          if (dist >= 45.0) {
+            this.t2Mode = 'cooldown';
+            this.t2CooldownTimer = 0;
+          }
+        } else if (this.t2Mode === 'cooldown') {
+          targetMoveAngle = Math.atan2(dx, dz);
+          desiredMoveSpeed = moveSpeed * 0.8;
+          this.t2CooldownTimer++;
+
+          if (this.t2CooldownTimer > 120) {
+            this.t2Mode = 'charge';
+          }
+        }
+
+      } else if (effectiveType === 3) {
+        if (this.t3Mode === 'approach') {
+          allowShoot = false;
+          desiredMoveSpeed = moveSpeed * 0.9;
+          if (nearestObs && minObsDist < 18) {
+            const hideX = nearestObs.x + (nearestObs.x - tankGroup.position.x) * 0.5;
+            const hideZ = nearestObs.z + (nearestObs.z - tankGroup.position.z) * 0.5;
+            const hdx = hideX - this.group.position.x;
+            const hdz = hideZ - this.group.position.z;
+            if (Math.sqrt(hdx * hdx + hdz * hdz) > 2.0) {
+              targetMoveAngle = Math.atan2(hdx, hdz);
+            } else {
+              targetMoveAngle = Math.atan2(dx, dz);
+            }
+          } else {
+            targetMoveAngle = Math.atan2(dx, dz);
+          }
+
+          if (dist < 18) {
+            this.t3Mode = 'burst';
+            this.t3BurstCount = 0;
+            this.t3BurstTimer = 0;
+          }
+
+        } else if (this.t3Mode === 'burst') {
+          allowShoot = true;
+          desiredMoveSpeed = moveSpeed * 0.3;
+          targetMoveAngle = Math.atan2(dx, dz);
+
+          this.t3BurstTimer++;
+          if (this.canShoot && this.t3BurstTimer % 20 === 0) {
+            shootBullet(this.group, this.barrelPivot, false);
+            this.t3BurstCount++;
+            this.canShoot = false;
+            setTimeout(() => { this.canShoot = true; }, 150);
+
+            if (this.t3BurstCount >= 5) {
+              this.t3Mode = 'flee';
+              this.t3FleeTimer = 0;
+            }
+          }
+          if (dist > 25) {
+            this.t3Mode = 'cooldown';
+          }
+
+        } else if (this.t3Mode === 'flee') {
+          allowShoot = false;
+          desiredMoveSpeed = moveSpeed * 1.5;
+          targetMoveAngle = Math.atan2(-dx, -dz);
+          this.t3FleeTimer++;
+
+          if (this.t3FleeTimer > 90 || dist > 32) {
+            this.t3Mode = 'cooldown';
+            this.aiTimer = 0;
+          }
+
+        } else if (this.t3Mode === 'cooldown') {
+          allowShoot = false;
+          desiredMoveSpeed = moveSpeed * 0.7;
+          targetMoveAngle = Math.atan2(dx, dz);
+          
+          if (this.aiTimer > 120) {
+            this.t3Mode = 'approach';
+            this.aiTimer = 0;
+          }
+        }
+
+      } else if (effectiveType === 4) {
+        if (dist < 28.0) {
+          this.t4Mode = 'flee';
+        } else if (this.t4Mode === 'flee' && dist > 42.0) {
+          this.t4Mode = 'flank';
+        }
+
+        if (this.t4Mode === 'flee') {
+          allowShoot = false;
+          desiredMoveSpeed = moveSpeed * 1.5;
+          targetMoveAngle = Math.atan2(-dx, -dz);
+        } else if (this.t4Mode === 'flank') {
+          allowShoot = false;
+          desiredMoveSpeed = moveSpeed * 1.3;
+
+          const playerYaw = tankGroup.rotation.y;
+          const targetBackX = tankGroup.position.x - Math.sin(playerYaw) * 45;
+          const targetBackZ = tankGroup.position.z - Math.cos(playerYaw) * 45;
+
+          const fdx = targetBackX - this.group.position.x;
+          const fdz = targetBackZ - this.group.position.z;
+          targetMoveAngle = Math.atan2(fdx, fdz);
+
+          const distToBack = Math.sqrt(fdx * fdx + fdz * fdz);
+          if (distToBack < 8.0 || dist > 60) {
+            this.t4Mode = 'snipe';
+            this.t4Timer = 0;
+          }
+        } else if (this.t4Mode === 'snipe') {
+          allowShoot = true;
+          desiredMoveSpeed = moveSpeed * 0.2;
+          targetMoveAngle = Math.atan2(dx, dz);
+
+          this.t4Timer++;
+          if (dist < 32.0 || this.t4Timer > 200) {
+            this.t4Mode = 'flank';
+          }
+        }
+      }
+
+      if (effectiveType !== 3 && nearestObs && minObsDist < 8.0) {
+        const avoidAngle = Math.atan2(this.group.position.x - nearestObs.x, this.group.position.z - nearestObs.z);
+        targetMoveAngle = avoidAngle;
+        desiredMoveSpeed *= 1.2;
+      }
+
+      let bodyDiff = targetMoveAngle - this.group.rotation.y;
+      while (bodyDiff < -Math.PI) bodyDiff += Math.PI * 2;
+      while (bodyDiff > Math.PI) bodyDiff -= Math.PI * 2;
+
+      const aiRotateSpeed = (effectiveType === 2) ? (normalRotateSpeed * 1.5) : normalRotateSpeed;
+      if (Math.abs(bodyDiff) > aiRotateSpeed) {
+        this.group.rotation.y += Math.sign(bodyDiff) * aiRotateSpeed;
+      } else {
+        this.group.rotation.y = targetMoveAngle;
+      }
+
+      const moveX = this.group.position.x + Math.sin(this.group.rotation.y) * desiredMoveSpeed;
+      const moveZ = this.group.position.z + Math.cos(this.group.rotation.y) * desiredMoveSpeed;
+
+      if (canMoveTo(moveX, moveZ, false, this.id)) {
+        this.group.position.x = moveX;
+        this.group.position.z = moveZ;
+        this.group.position.y = getTerrainHeight(moveX, moveZ);
+        updateTankOrientation(this.group);
+      } else {
+        const altAngle = this.group.rotation.y + (Math.random() < 0.5 ? 1.5 : -1.5);
+        const altMoveX = this.group.position.x + Math.sin(altAngle) * desiredMoveSpeed;
+        const altMoveZ = this.group.position.z + Math.cos(altAngle) * desiredMoveSpeed;
+        if (canMoveTo(altMoveX, altMoveZ, false, this.id)) {
+          this.group.position.x = altMoveX;
+          this.group.position.z = altMoveZ;
+          this.group.position.y = getTerrainHeight(altMoveX, altMoveZ);
+          this.group.rotation.y = altAngle;
+          updateTankOrientation(this.group);
+        }
+      }
+
+      let targetTurretLocal = targetTurretWorldAngle - this.group.rotation.y;
+      let turretDiff = targetTurretLocal - this.turretGroup.rotation.y;
+
+      while (turretDiff < -Math.PI) turretDiff += Math.PI * 2;
+      while (turretDiff > Math.PI) turretDiff -= Math.PI * 2;
+
+      const enemyTurretSpeed = normalTurretRotateSpeed;
+      if (Math.abs(turretDiff) > enemyTurretSpeed) {
+        this.turretGroup.rotation.y += Math.sign(turretDiff) * enemyTurretSpeed;
+      } else {
+        this.turretGroup.rotation.y += turretDiff;
+      }
+
+      let predictDist = dist;
+      if (effectiveType === 1 || effectiveType === 4) {
+        predictDist *= 0.65;
+      }
+
+      const g = BULLET_PARAMS.gravity;
+      const v = BULLET_PARAMS.speed;
+      const val = (predictDist * g) / (v * v);
+
+      if (val <= 1.0 && val >= -1.0) {
+        const pitch = 0.5 * Math.asin(val);
+        let calculatedPitch = -THREE.MathUtils.clamp(pitch, TANK_PITCH_LIMIT.min, TANK_PITCH_LIMIT.max);
+        if (effectiveType === 1 || effectiveType === 4) {
+          calculatedPitch *= 1.15;
+        }
+        this.barrelPivot.rotation.x = calculatedPitch;
+      }
+
+      if (effectiveType !== 3) {
+        let shootPrecisionThreshold = 0.25;
+        if (effectiveType === 1 || effectiveType === 4) {
+          shootPrecisionThreshold = 0.45;
+        }
+        if (allowShoot && Math.abs(turretDiff) < shootPrecisionThreshold && this.canShoot) {
+          shootBullet(this.group, this.barrelPivot, false);
+          this.canShoot = false;
+          
+          let cooldownVal = 1000;
+          if (effectiveType === 1) cooldownVal = 700;
+          if (effectiveType === 4) cooldownVal = 600;
+          if (effectiveType === 2) cooldownVal = 500;
+
+          setTimeout(() => { this.canShoot = true; }, cooldownVal);
+        }
+      }
+    }
+
+    triggerBlowup(hitBulletVel) {
+      this.state = 'flying';
+      this.pinGroup.visible = false;
+      const blowDir = hitBulletVel.clone().normalize();
+      this.vel.set(blowDir.x * 0.8, 0.9, blowDir.z * 0.8);
+
+      this.rotVel.set(
+        (Math.random() - 0.5) * 0.3,
+        (Math.random() - 0.5) * 0.3,
+        (Math.random() - 0.5) * 0.3
+      );
+
+      createExplosion(this.group.position);
+    }
+
+    destroy() {
+      scene.remove(this.group);
+    }
+  }
+
+  function updateAllTanksAppearance() {
+    enemiesList.forEach(enemy => {
+      enemy.updateAppearance();
+    });
+  }
+
+  function updateTankOrientation(tankGroupObj) {
+    const px = tankGroupObj.position.x;
+    const pz = tankGroupObj.position.z;
+    const yaw = tankGroupObj.rotation.y;
+
+    const sampleDist = 1.2;
+    const frontX = px + Math.sin(yaw) * sampleDist;
+    const frontZ = pz + Math.cos(yaw) * sampleDist;
+    const backX = px - Math.sin(yaw) * sampleDist;
+    const backZ = pz - Math.cos(yaw) * sampleDist;
+
+    const rightYaw = yaw + Math.PI / 2;
+    const rightX = px + Math.sin(rightYaw) * sampleDist;
+    const rightZ = pz + Math.cos(rightYaw) * sampleDist;
+    const leftX = px - Math.sin(rightYaw) * sampleDist;
+    const leftZ = pz - Math.cos(rightYaw) * sampleDist;
+
+    const hF = getTerrainHeight(frontX, frontZ);
+    const hB = getTerrainHeight(backX, backZ);
+    const hR = getTerrainHeight(rightX, rightZ);
+    const hL = getTerrainHeight(leftX, leftZ);
+
+    const pitch = -Math.atan2(hF - hB, sampleDist * 2);
+    const roll = -Math.atan2(hL - hR, sampleDist * 2);
+
+    tankGroupObj.rotation.set(pitch, yaw, roll, 'YXZ');
+  }
+
+  function restartGame() {    
+    if (restartTimeoutId) {
+      clearTimeout(restartTimeoutId);
+      restartTimeoutId = null;
+    }
+    isGameFinished = false;
+    winOverlay.style.opacity = '0';
+    playerHits = 0;
+    playerShots = 0;
+    gameStartTime = Date.now();
+
+    createObstacles();
+
+    enemiesList.forEach(e => e.destroy());
+    enemiesList = [];
+
+    bullets.forEach(b => scene.remove(b.mesh));
+    bullets.length = 0;
+
+    let validPlayerPos = false;
+    let pX = 0, pZ = 0;
+    while (!validPlayerPos) {
+      pX = (Math.random() - 0.5) * 120;
+      pZ = (Math.random() - 0.5) * 120;
+      validPlayerPos = true;
+      for (let obs of obstacleObjects) {
+        const odx = pX - obs.x;
+        const odz = pZ - obs.z;
+        if (Math.sqrt(odx * odx + odz * odz) < (obs.radius + 3.0)) {
+          validPlayerPos = false;
+          break;
+        }
+      }
+    }
+
+    tankGroup.position.set(pX, getTerrainHeight(pX, pZ), pZ);
+    tankGroup.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    updateTankOrientation(tankGroup);
+    turretGroup.rotation.y = 0;
+    barrelPivot.rotation.x = 0;
+
+    const types = [1,2,3,4,5];
+    for (let i = 0; i < 5; i++) {
+      enemiesList.push(new EnemyInstance(i, types[i]));
+    }    
+  }
+
+  function triggerPlayerHitEffect() {
+    playerHits++;
+    damageOverlay.style.opacity = '1';
+    setTimeout(() => {
+      damageOverlay.style.opacity = '0';
+    }, 150);
+    screenShakeIntensity = 12.0;
+    playExplosionSound();
+  }
+
+  function shootBullet(ownerGroup, ownerBarrelPivot, isPlayer = false) {
+    if (isPlayer) {
+      playShootSound();
+      playerShots++;
+    }
+
+    const bulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
+    const bulletMat = new THREE.MeshBasicMaterial({ color: isPlayer ? 0xffcc00 : 0xff3300 });
+    const bulletMesh = new THREE.Mesh(bulletGeo, bulletMat);
+
+    const barrelTipWorld = new THREE.Vector3(0, 0, 3);
+    ownerBarrelPivot.localToWorld(barrelTipWorld);
+    bulletMesh.position.copy(barrelTipWorld);
+
+    const worldQuat = new THREE.Quaternion();
+    ownerBarrelPivot.getWorldQuaternion(worldQuat);
+
+    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(worldQuat).normalize();
+    const velocity = dir.multiplyScalar(BULLET_PARAMS.speed);
+
+    scene.add(bulletMesh);
+    bullets.push({ mesh: bulletMesh, vel: velocity, life: 180, isPlayer: isPlayer, owner: ownerGroup });
+  }
+
+  function createExplosion(position) {
+    playExplosionSound();
+
+    const pCount = 40;
+    const pGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+    const pMat = new THREE.MeshBasicMaterial({ color: 0xff4500 });
+
+    for (let i = 0; i < pCount; i++) {
+      const pMesh = new THREE.Mesh(pGeo, pMat);
+      pMesh.position.copy(position);
+
+      const velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 1.5,
+        Math.random() * 1.5 + 0.3,
+        (Math.random() - 0.5) * 1.5
+      );
+
+      scene.add(pMesh);
+      particles.push({ mesh: pMesh, vel: velocity, life: 45 });
+    }
+  }
+
+  function createSmokeParticle(position) {
+    const sGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+    const sMat = new THREE.MeshBasicMaterial({
+      color: 0x333333,
+      transparent: true,
+      opacity: 0.7
+    });
+    const sMesh = new THREE.Mesh(sGeo, sMat);
+
+    sMesh.position.copy(position).add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.8,
+      Math.random() * 0.5,
+      (Math.random() - 0.5) * 0.8
+    ));
+
+    const vel = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.1,
+      Math.random() * 0.15 + 0.05,
+      (Math.random() - 0.5) * 0.1
+    );
+
+    scene.add(sMesh);
+    smokeParticles.push({ mesh: sMesh, vel: vel, life: 60, maxLife: 60 });
+  }
+
+  function canMoveTo(nextX, nextZ, selfIsPlayer, selfEnemyId = -1) {
+    const tankRadius = 2.5;
+    const fieldLimit = 95.0;
+
+    if (Math.abs(nextX) > fieldLimit || Math.abs(nextZ) > fieldLimit) {
+      return false;
+    }
+
+    for (let i = 0; i < obstacleObjects.length; i++) {
+      const obs = obstacleObjects[i];
+      const dx = nextX - obs.x;
+      const dz = nextZ - obs.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < (tankRadius + obs.radius)) {
+        return false;
+      }
+    }
+
+    if (selfIsPlayer) {
+      for (let enemy of enemiesList) {
+        if (enemy.state === 'active') {
+          const dx = nextX - enemy.group.position.x;
+          const dz = nextZ - enemy.group.position.z;
+          if (Math.sqrt(dx * dx + dz * dz) < 4.0) return false;
+        }
+      }
+    } else {
+      const dx = nextX - tankGroup.position.x;
+      const dz = nextZ - tankGroup.position.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 4.0) return false;
+
+      for (let other of enemiesList) {
+        if (other.id !== selfEnemyId && other.state === 'active') {
+          const odx = nextX - other.group.position.x;
+          const odz = nextZ - other.group.position.z;
+          if (Math.sqrt(odx * odx + odz * odz) < 4.0) return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  function updateLandingMarker() {
+    if (!showLandingMarker) {
+      markerGroup.visible = false;
+      return;
+    }
+
+    const pos = new THREE.Vector3(0, 0, 3);
+    barrelPivot.localToWorld(pos);
+
+    const worldQuat = new THREE.Quaternion();
+    barrelPivot.getWorldQuaternion(worldQuat);
+    const vel = new THREE.Vector3(0, 0, 1).applyQuaternion(worldQuat).multiplyScalar(BULLET_PARAMS.speed);
+
+    let simPos = pos.clone();
+    let simVel = vel.clone();
+    let hitFound = false;
+
+    for (let step = 0; step < 300; step++) {
+      simPos.add(simVel);
+      simVel.y -= BULLET_PARAMS.gravity;
+
+      const groundH = getTerrainHeight(simPos.x, simPos.z);
+      if (simPos.y <= groundH + 0.05) {
+        simPos.y = groundH + 0.05;
+        hitFound = true;
+        break;
+      }
+    }
+
+    if (hitFound) {
+      markerGroup.position.set(simPos.x, getTerrainHeight(simPos.x, simPos.z) + 0.05, simPos.z);
+      markerGroup.visible = true;
+    } else {
+      markerGroup.visible = false;
+    }
+  }
+
+  function updateUI() {
+    const isShiftPressed = (keys['ShiftLeft'] || keys['ShiftRight']);
+    if (isShiftPressed) {
+      iconSpeed.textContent = "精";
+      iconSpeed.style.color = "#00ffcc";
+      iconSpeed.style.borderColor = "#00ffcc";
+      iconSpeed.title = "移動速度 (精密)";
+    } else {
+      iconSpeed.textContent = "通";
+      iconSpeed.style.color = "#ffffff";
+      iconSpeed.style.borderColor = "#666";
+      iconSpeed.title = "移動速度 (通常)";
+    }
+
+    if (indestructibleMode) {
+      iconBreak.textContent = "不";
+      iconBreak.style.color = "#ff6666";
+      iconBreak.style.borderColor = "#ff6666";
+      iconBreak.title = "オブジェクト破壊 (不可)";
+    } else {
+      iconBreak.textContent = "可";
+      iconBreak.style.color = "#33ff33";
+      iconBreak.style.borderColor = "#33ff33";
+      iconBreak.title = "オブジェクト破壊 (可能)";
+    }
+
+    let dotsHtml = "";
+    enemiesList.forEach(e => {
+      if (e.state === 'active') {
+        const activeTypeForDot = (e.type === 5 && e.isTransformed) ? 2 : e.type;
+        const cfg = ENEMY_TYPE_CONFIGS[activeTypeForDot];
+        const dotColor = revealColorsMode ? cfg.cssColor : '#aaaaaa';
+        dotsHtml += `<span style="display: inline-block; width: 12px; height: 12px; background-color: ${dotColor}; border-radius: 50%; box-shadow: 0 0 4px ${dotColor};"></span>`;
+      }
+    });
+    elEnemyDotsContainer.innerHTML = dotsHtml;
+  }
+
+  restartGame();
+  updateGuideVisibility();
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const now = Date.now();
+
+    const isShiftPressed = (keys['ShiftLeft'] || keys['ShiftRight']);
+    const activeRotateSpeed = isShiftPressed ? shiftRotateSpeed : normalRotateSpeed;
+    const activeTurretRotateSpeed = isShiftPressed ? shiftTurretRotateSpeed : normalTurretRotateSpeed;
+
+    if (!isGameFinished) {
+      if (keys['ArrowUp']) {
+        const nextX = tankGroup.position.x + Math.sin(tankGroup.rotation.y) * moveSpeed;
+        const nextZ = tankGroup.position.z + Math.cos(tankGroup.rotation.y) * moveSpeed;
+        if (canMoveTo(nextX, nextZ, true)) {
+          tankGroup.position.x = nextX;
+          tankGroup.position.z = nextZ;
+          tankGroup.position.y = getTerrainHeight(nextX, nextZ);
+          updateTankOrientation(tankGroup);
+        }
+      }
+      if (keys['ArrowDown']) {
+        const nextX = tankGroup.position.x - Math.sin(tankGroup.rotation.y) * (moveSpeed * 0.5);
+        const nextZ = tankGroup.position.z - Math.cos(tankGroup.rotation.y) * (moveSpeed * 0.5);
+        if (canMoveTo(nextX, nextZ, true)) {
+          tankGroup.position.x = nextX;
+          tankGroup.position.z = nextZ;
+          tankGroup.position.y = getTerrainHeight(nextX, nextZ);
+          updateTankOrientation(tankGroup);
+        }
+      }
+
+      if (keys['ArrowLeft']) {
+        tankGroup.rotation.y += activeRotateSpeed;
+        updateTankOrientation(tankGroup);
+      }
+      if (keys['ArrowRight']) {
+        tankGroup.rotation.y -= activeRotateSpeed;
+        updateTankOrientation(tankGroup);
+      }
+
+      if (keys['Delete']) turretGroup.rotation.y += activeTurretRotateSpeed;
+      if (keys['End']) turretGroup.rotation.y -= activeTurretRotateSpeed;
+
+      const currentPitchSpeed = isShiftPressed ? (baseBarrelPitchSpeed * 0.25) : baseBarrelPitchSpeed;
+
+      if (keys['PageUp']) barrelPivot.rotation.x -= currentPitchSpeed;
+      if (keys['PageDown']) barrelPivot.rotation.x += currentPitchSpeed;
+
+      barrelPivot.rotation.x = THREE.MathUtils.clamp(
+        barrelPivot.rotation.x,
+        -TANK_PITCH_LIMIT.max,
+        -TANK_PITCH_LIMIT.min
+      );
+
+      if (keys['Space']) {
+        if (now - lastShootTime >= BULLET_PARAMS.cooldown) {
+          shootBullet(tankGroup, barrelPivot, true);
+          lastShootTime = now;
+        }
+      }
+    }
+
+    updateLandingMarker();
+
+    enemiesList.forEach(enemy => {
+      if (enemy.state === 'active') {
+        if (!isGameFinished) enemy.updateAI();
+      } else if (enemy.state === 'flying') {
+        enemy.group.position.add(enemy.vel);
+        enemy.group.rotation.x += enemy.rotVel.x;
+        enemy.group.rotation.y += enemy.rotVel.y;
+        enemy.group.rotation.z += enemy.rotVel.z;
+
+        enemy.vel.y -= 0.04;
+
+        const groundH = getTerrainHeight(enemy.group.position.x, enemy.group.position.z);
+        if (enemy.group.position.y <= groundH) {
+          enemy.group.position.y = groundH;
+          enemy.state = 'wrecked';
+          enemy.smokeTimer = 180;
+
+          createExplosion(enemy.group.position);
+
+          enemy.tankData.bodyMat.color.setHex(0x111111);
+          enemy.tankData.turretMat.color.setHex(0x111111);
+
+          const allDestroyed = enemiesList.every(e => e.state !== 'active');
+
+          if (allDestroyed && !isGameFinished) {
+            isGameFinished = true;
+            const elapsedSeconds = ((Date.now() - gameStartTime) / 1000).toFixed(1);
+            winTimeEl.textContent = `経過時間: ${elapsedSeconds}秒`;
+            winStatsEl.textContent = `被弾: ${playerHits} / 発射: ${playerShots}`;
+            winOverlay.style.opacity = '1';
+            restartTimeoutId = setTimeout(() => {
+              restartGame();
+            }, 5000);
+          }
+        }
+      } else if (enemy.state === 'wrecked') {
+        if (enemy.smokeTimer > 0) {
+          enemy.smokeTimer--;
+          if (enemy.smokeTimer % 3 === 0) {
+            createSmokeParticle(enemy.group.position);
+          }
+        }
+      }
+    });
+
+    updateUI();
+
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+
+      b.mesh.position.add(b.vel);
+      b.vel.y -= BULLET_PARAMS.gravity;
+      b.life--;
+
+      let hit = false;
+      const bPos = b.mesh.position;
+      const groundH = getTerrainHeight(bPos.x, bPos.z);
+
+      if (bPos.y <= groundH + 0.1) {
+        hit = true;
+        playHitGroundSound();
+      }
+
+      if (!hit) {
+        for (let j = obstacleObjects.length - 1; j >= 0; j--) {
+          const obs = obstacleObjects[j];
+          const dx = bPos.x - obs.x;
+          const dz = bPos.z - obs.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+
+          // 厳格な衝突判定：水平方向の半径内かつ、オブジェクトの実際の高さ範囲（bottomY 〜 topY）にいる場合のみヒットとする
+          if (dist < obs.radius && bPos.y >= obs.bottomY && bPos.y <= obs.topY) {
+            hit = true;
+            createExplosion(bPos);
+            if (!indestructibleMode) {
+              scene.remove(obs.mesh);
+              obs.mesh.geometry.dispose();
+              obs.mesh.material.dispose();
+              obstacleObjects.splice(j, 1);
+            }
+            break;
+          }
+        }
+      }
+
+      if (b.isPlayer && !hit) {
+        for (let enemy of enemiesList) {
+          if (enemy.state === 'active') {
+            const dx = bPos.x - enemy.group.position.x;
+            const dz = bPos.z - enemy.group.position.z;
+            const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+            const heightDiff = bPos.y - enemy.group.position.y;
+
+            let heightLimit = 3.0;
+            if (horizontalDist < 3.0) {
+              heightLimit = 1.8 + horizontalDist * 0.4;
+            }
+
+            if (horizontalDist < 2.5 && heightDiff < heightLimit) {
+              hit = true;
+              const effectiveType = (enemy.type === 5 && enemy.isTransformed) ? 2 : enemy.type;
+              if (effectiveType === 2 && enemy.t2Mode === 'charge') {
+                enemy.t2Mode = 'flee';
+                enemy.t2EngagementTimer = 0;
+              }
+              enemy.triggerBlowup(b.vel);
+            }
+          }
+        }
+      }
+
+      if (!b.isPlayer && !hit) {
+        const dx = bPos.x - tankGroup.position.x;
+        const dz = bPos.z - tankGroup.position.z;
+        const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+        const heightDiff = bPos.y - tankGroup.position.y;
+
+        let heightLimit = 3.0;
+        if (horizontalDist < 3.0) {
+          heightLimit = 1.8 + horizontalDist * 0.4;
+        }
+
+        if (horizontalDist < 2.2 && heightDiff < heightLimit) {
+          hit = true;
+          triggerPlayerHitEffect();
+          enemiesList.forEach(enemy => {
+            const effectiveType = (enemy.type === 5 && enemy.isTransformed) ? 2 : enemy.type;
+            if (effectiveType === 2 && enemy.owner === b.owner && enemy.t2Mode === 'charge') {
+              enemy.t2Mode = 'flee';
+              enemy.t2EngagementTimer = 0;
+            }
+          });
+        }
+      }
+
+      if (hit || b.life <= 0) {
+        scene.remove(b.mesh);
+        b.mesh.geometry.dispose();
+        b.mesh.material.dispose();
+        bullets.splice(i, 1);
+      }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.mesh.position.add(p.vel);
+      p.vel.y -= 0.04;
+      p.life--;
+
+      if (p.life <= 0) {
+        scene.remove(p.mesh);
+        p.mesh.geometry.dispose();
+        p.mesh.material.dispose();
+        particles.splice(i, 1);
+      }
+    }
+
+    for (let i = smokeParticles.length - 1; i >= 0; i--) {
+      const s = smokeParticles[i];
+      s.mesh.position.add(s.vel);
+      s.life--;
+
+      s.mesh.material.opacity = (s.life / s.maxLife) * 0.7;
+      s.mesh.scale.addScalar(0.02);
+
+      if (s.life <= 0) {
+        scene.remove(s.mesh);
+        s.mesh.geometry.dispose();
+        s.mesh.material.dispose();
+        smokeParticles.splice(i, 1);
+      }
+    }
+
+    const tankPitch = tankGroup.rotation.x;
+    const dynamicHeightOffset = 7.5 + Math.sin(tankPitch) * 3.5;
+    const dynamicZOffset = -11.0 + Math.sin(tankPitch) * 2.0;
+
+    const relativeCameraOffset = new THREE.Vector3(0, dynamicHeightOffset, dynamicZOffset);
+    const cameraOffset = relativeCameraOffset.applyMatrix4(tankGroup.matrixWorld);
+
+    const groundHAtCam = getTerrainHeight(cameraOffset.x, cameraOffset.z);
+    if (cameraOffset.y < groundHAtCam + 1.2) {
+      cameraOffset.y = groundHAtCam + 1.2;
+    }
+
+    if (screenShakeIntensity > 0) {
+      cameraOffset.x += (Math.random() - 0.5) * screenShakeIntensity * 0.05;
+      cameraOffset.y += (Math.random() - 0.5) * screenShakeIntensity * 0.05;
+      cameraOffset.z += (Math.random() - 0.5) * screenShakeIntensity * 0.05;
+      screenShakeIntensity *= 0.88;
+      if (screenShakeIntensity < 0.1) screenShakeIntensity = 0;
+    }
+
+    camera.position.x = cameraOffset.x;
+    camera.position.y = cameraOffset.y;
+    camera.position.z = cameraOffset.z;
+
+    const targetOffset = new THREE.Vector3(0, 1.0, 8.0).applyMatrix4(tankGroup.matrixWorld);
+    camera.lookAt(targetOffset);
+
+    renderer.render(scene, camera);
+  }
+
+  animate();
+</script>
+</body>
+</html>
